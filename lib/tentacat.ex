@@ -46,18 +46,18 @@ defmodule Tentacat do
       `:manual` will return a 3 element tuple of `{page_body, url_for_next_page, auth_credentials}`,
       which will allow you to control the paging yourself.
   """
-  def get(path, client, params \\ [], options \\ []) do
+  def get(path, client, params \\ [], options \\ [], headers \\ []) do
     url =
       client
       |> url(path)
       |> add_params_to_url(params)
 
     case pagination(options) do
-      nil     -> request_stream(:get, url, client.auth) |> realize_if_needed
-      :none   -> request_stream(:get, url, client.auth, "", :one_page)
-      :auto   -> request_stream(:get, url, client.auth) |> realize_if_needed
-      :stream -> request_stream(:get, url, client.auth)
-      :manual -> request_with_pagination(:get, url, client.auth)
+      nil     -> request_stream(:get, url, client.auth, "", nil, headers) |> realize_if_needed
+      :none   -> request_stream(:get, url, client.auth, "", :one_page, headers)
+      :auto   -> request_stream(:get, url, client.auth, "", nil, headers) |> realize_if_needed
+      :stream -> request_stream(:get, url, client.auth, "", nil, headers)
+      :manual -> request_with_pagination(:get, url, client.auth, "", headers)
     end
   end
 
@@ -82,8 +82,8 @@ defmodule Tentacat do
     request!(method, url, body, headers, extra_options ++ options) |> process_response
   end
 
-  def request_stream(method, url, auth, body \\ "", override \\ nil) do
-    request_with_pagination(method, url, auth, JSX.encode!(body))
+  def request_stream(method, url, auth, body \\ "", override \\ nil, headers \\ []) do
+    request_with_pagination(method, url, auth, JSX.encode!(body), headers)
     |> stream_if_needed(override)
   end
   defp stream_if_needed(result = {status_code, _}, _) when is_number(status_code), do: result
@@ -112,8 +112,8 @@ defmodule Tentacat do
   end
 
   @spec request_with_pagination(atom, binary, Client.auth, binary) :: {binary, binary, Client.auth}
-  def request_with_pagination(method, url, auth, body \\ "") do
-    resp = request!(method, url, JSX.encode!(body), authorization_header(auth, @user_agent), extra_options)
+  def request_with_pagination(method, url, auth, body \\ "", headers \\ []) do
+    resp = request!(method, url, JSX.encode!(body), authorization_header(auth, @user_agent ++ headers), extra_options)
     case process_response(resp) do
       x when is_tuple(x) -> x
       _ -> pagination_tuple(resp, auth)
